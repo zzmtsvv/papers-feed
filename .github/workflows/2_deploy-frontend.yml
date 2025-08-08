@@ -106,12 +106,19 @@ jobs:
       - name: Install dependencies
         run: pip install gh-store
 
-      - name: Update snapshot
+      - name: Update snapshot with debug
         env:
           SNAPSHOT_PATH: data/papers/gh-store-snapshot.json
         run: |
           mkdir -p $(dirname ${{ env.SNAPSHOT_PATH }})
-          python -m gh_store update-snapshot \
+          # Добавляем отладочную информацию
+          echo "Python version: $(python --version)"
+          echo "Token prefix: ${GITHUB_TOKEN:0:4}..." # Показываем только начало токена в целях безопасности
+          echo "Repository: ${{ github.repository }}"
+          echo "Snapshot path: ${{ env.SNAPSHOT_PATH }}"
+          
+          # Запускаем с отладкой Python
+          PYTHONVERBOSE=1 python -m gh_store update-snapshot \
             --token ${{ secrets.GITHUB_TOKEN }} \
             --repo ${{ github.repository }} \
             --snapshot-path ${{ env.SNAPSHOT_PATH }}
