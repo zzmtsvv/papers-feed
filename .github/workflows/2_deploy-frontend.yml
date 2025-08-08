@@ -3,7 +3,7 @@ name: Deploy Frontend
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
+    branches: [ gh-pages ]
     paths:
       - 'data/papers/gh-store-snapshot.json'
       - 'frontend/*'
