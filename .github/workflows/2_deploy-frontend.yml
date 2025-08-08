@@ -29,20 +29,71 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            while (true) {
+            try {
+              // Получаем все workflow в репозитории
+              const allWorkflows = await github.rest.actions.listRepoWorkflows({
+                owner: context.repo.owner,
+                repo: context.repo.repo
+              });
+              
+              // Выводим список всех workflow для диагностики
+              console.log("Available workflows:");
+              allWorkflows.data.workflows.forEach(w => {
+                console.log(`  - ${w.name} (ID: ${w.id}, Path: ${w.path})`);
+              });
+              
+              // Ищем наш workflow, используя нечеткое сравнение
+              const storeWorkflow = allWorkflows.data.workflows.find(w => 
+                w.name.toLowerCase().includes('store') && 
+                w.name.toLowerCase().includes('sync')
+              );
+              
+              if (!storeWorkflow) {
+                console.log('Store sync workflow not found, proceeding with deployment');
+                return;
+              }
+              
+              console.log(`Found matching workflow: ${storeWorkflow.name} (ID: ${storeWorkflow.id})`);
+              
+              // Проверяем активные запуски
               const runs = await github.rest.actions.listWorkflowRuns({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                workflow_id: 'Store Sync',
+                workflow_id: storeWorkflow.id,
               });
               
               const activeUpdates = runs.data.workflow_runs.filter(run => 
                 (run.status === 'in_progress' || run.status === 'queued')
               );
               
-              if (activeUpdates.length === 0) break;
-              console.log(`Waiting for ${activeUpdates.length} active updates to complete...`);
-              await new Promise(r => setTimeout(r, 10000));
+              if (activeUpdates.length > 0) {
+                console.log(`Waiting for ${activeUpdates.length} active updates to complete...`);
+                // Ждем не более 1 минуты
+                for (let i = 0; i < 6; i++) {
+                  await new Promise(r => setTimeout(r, 10000));
+                  const updatedRuns = await github.rest.actions.listWorkflowRuns({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    workflow_id: storeWorkflow.id,
+                  });
+                  
+                  const stillActive = updatedRuns.data.workflow_runs.filter(run => 
+                    (run.status === 'in_progress' || run.status === 'queued')
+                  );
+                  
+                  if (stillActive.length === 0) {
+                    console.log('All updates completed, proceeding with deployment');
+                    break;
+                  }
+                  
+                  console.log(`Still waiting for ${stillActive.length} active updates...`);
+                }
+              } else {
+                console.log('No active updates, proceeding with deployment');
+              }
+            } catch (error) {
+              console.log(`Error checking workflow runs: ${error}`);
+              console.log('Proceeding with deployment anyway');
             }
 
       - uses: actions/checkout@v4
